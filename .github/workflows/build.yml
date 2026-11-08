@@ -13,3 +13,19 @@ jobs:
           java-version: '17'
           cache: maven
       - run: bash mvnw -B verify
+      - name: Check HTTP server
+        shell: bash
+        run: |
+          java -jar target/currency-rates-1.0.0.jar --collector.enabled=false > target/server.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --silent --fail http://localhost:8080/api/currencies > target/currencies.json; then
+              break
+            fi
+            sleep 1
+          done
+          python3 -c 'import json; assert set(json.load(open("target/currencies.json"))) == {"USD", "EUR", "CNY", "GBP", "JPY"}'
+          curl --silent --show-error --fail http://localhost:8080/answer > target/answer.json
+          python3 -c 'import json; assert json.load(open("target/answer.json"))["totalElements"] == 0'
+
