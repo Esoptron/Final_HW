@@ -1,0 +1,36 @@
+### Поддерживаемые валюты
+GET http://localhost:8080/api/currencies
+
+### Сбор на дату; id из ответа используйте в следующем запросе
+POST http://localhost:8080/api/collections
+Content-Type: application/json
+
+{
+  "date": "2024-04-02",
+  "sourceUrl": "https://www.cbr.ru/scripts/XML_daily.asp"
+}
+
+### Сбор за сегодня
+POST http://localhost:8080/api/collections
+Content-Type: application/json
+
+{}
+
+### Статус задачи: замените значение jobId на id из POST
+@jobId = 00000000-0000-0000-0000-000000000000
+GET http://localhost:8080/api/collections/{{jobId}}
+
+### Последние сохранённые результаты
+GET http://localhost:8080/answer
+
+### Результаты на дату
+GET http://localhost:8080/answer?date=2024-04-02
+
+### Конкретная валюта на дату
+GET http://localhost:8080/api/rates/USD?date=2024-04-02
+
+### Сортировка и пагинация
+GET http://localhost:8080/answer?date=2024-04-02&sortBy=RATE&direction=DESC&page=0&size=2
+
+### Фильтрация
+GET http://localhost:8080/answer?date=2024-04-02&currency=JPY
