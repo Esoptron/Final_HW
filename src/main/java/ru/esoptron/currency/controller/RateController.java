@@ -1,5 +1,6 @@
 package ru.esoptron.currency.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.esoptron.currency.dto.*;
@@ -21,6 +22,11 @@ public class RateController {
         this.collections = collections;
         this.queries = queries;
         this.clock = clock;
+    }
+
+    @GetMapping("/")
+    public ResponseEntity<Void> home() {
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create("/answer")).build();
     }
 
     @GetMapping("/api/currencies")

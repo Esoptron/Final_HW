@@ -26,6 +26,6 @@ jobs:
             sleep 1
           done
           python3 -c 'import json; assert set(json.load(open("target/currencies.json"))) == {"USD", "EUR", "CNY", "GBP", "JPY"}'
-          curl --silent --show-error --fail http://localhost:8080/answer > target/answer.json
+          curl --location --silent --show-error --fail http://localhost:8080/ > target/answer.json
           python3 -c 'import json; assert json.load(open("target/answer.json"))["totalElements"] == 0'
 
