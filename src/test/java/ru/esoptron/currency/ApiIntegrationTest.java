@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:rates-test;DB_CLOSE_DELAY=-1",
-        "collector.enabled=false", "collector.audit-file=target/test-collections.log"})
+        "collector.enabled=false", "rates.fallback-enabled=false", "collector.audit-file=target/test-collections.log"})
 @AutoConfigureMockMvc
 class ApiIntegrationTest {
     @Autowired MockMvc mvc;
@@ -115,6 +115,9 @@ class ApiIntegrationTest {
         var job = waitFor(submit("{\"date\":\"2024-04-02\"}"));
         assertThat(job.status()).isEqualTo(CollectionJob.Status.FAILED);
         assertThat(job.error()).contains("ЦБ РФ недоступен");
+        mvc.perform(get("/api/collections/latest")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(job.id().toString()))
+                .andExpect(jsonPath("$.status").value("FAILED"));
         assertThat(repository.count()).isZero();
         source.verify();
     }

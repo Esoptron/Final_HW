@@ -26,6 +26,10 @@ jobs:
             sleep 1
           done
           python3 -c 'import json; assert set(json.load(open("target/currencies.json"))) == {"USD", "EUR", "CNY", "GBP", "JPY"}'
-          curl --location --silent --show-error --fail http://localhost:8080/ > target/answer.json
+          curl --silent --show-error --fail http://localhost:8080/ > target/index.html
+          python3 -c 'from pathlib import Path; s=Path("target/index.html").read_text(); assert "Курсы валют" in s and "/app.js" in s and "id=\"rates\"" in s'
+          curl --silent --show-error --fail http://localhost:8080/app.js > target/app.js
+          curl --silent --show-error --fail http://localhost:8080/styles.css > target/styles.css
+          curl --silent --show-error --fail http://localhost:8080/answer > target/answer.json
           python3 -c 'import json; assert json.load(open("target/answer.json"))["totalElements"] == 0'
 

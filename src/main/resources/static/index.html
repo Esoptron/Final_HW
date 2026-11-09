@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Курсы валют к рублю, изменение за день и история на выбранную дату.">
+  <title>Курсы валют</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="shell brand"><span class="brand-mark" aria-hidden="true">₽</span><span>Currency Rates</span><span class="local-tag">Пять валют к рублю</span></div></header>
+  <main class="shell">
+    <div class="heading">
+      <div><p class="eyebrow">ВАЛЮТЫ / РУБЛЬ</p><h1>Курсы валют</h1><p class="intro">Курсы и изменение за календарный день.</p></div>
+      <span id="connection" class="badge">Подключаемся к сервису</span>
+    </div>
+
+    <section class="panel controls" aria-label="Параметры курсов">
+      <label>Дата курса<input id="date" type="date" min="2000-01-02" required></label>
+      <label>Валюта<select id="currency"><option value="">Все валюты</option>USD</option><option>EUR</option><option>CNY</option><option>GBP</option><option>JPY</option></select></label>
+      <label>Сортировка<select id="sort"><option value="CURRENCY">По валюте</option><option value="RATE">По курсу</option><option value="CHANGE">По изменению в рублях</option><option value="CHANGE_PERCENT">По изменению в процентах</option></select></label>
+      <label>Порядок<select id="direction"><option value="ASC">По возрастанию</option><option value="DESC">По убыванию</option></select></label>
+      <button id="collect" type="button">Загрузить курсы</button>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite"><span class="notice-dot" aria-hidden="true"></span><div><strong id="notice-title">Проверяем сохранённые курсы</strong><p id="notice-detail">После загрузки здесь появятся данные за выбранную дату.</p></div></div>
+
+    <section class="panel results" aria-labelledby="table-heading">
+      <div class="table-heading"><div><h2 id="table-heading">Курс к рублю</h2><p>Стоимость одной единицы валюты · RUB</p></div><button id="refresh" class="secondary" type="button">Обновить таблицу</button></div>
+      <div class="table-scroll"><table>
+        <thead><tr><th scope="col">Валюта</th><th scope="col" class="number">Курс, ₽</th><th scope="col" class="number">За день, ₽</th><th scope="col" class="number">За день, %</th><th scope="col">Действует с</th></tr></thead>
+        <tbody id="rates"><tr><td colspan="5" class="empty">Загружаем данные…</td></tr></tbody>
+      </table></div>
+      <div class="table-footer"><span id="count">5 поддерживаемых валют: USD, EUR, CNY, GBP, JPY</span><span id="updated">Обновление каждые 6 часов</span></div>
+    </section>
+
+    <section class="explanation"><h2>Как читать курсы</h2><p>Все значения пересчитаны на одну единицу валюты, включая иену. Дата действия курса может отличаться от выбранной даты, а изменение за день может быть нулевым. При недоступности ЦБ используется резервный Currency API: его курсы могут отличаться от официальных. Фактический источник указан ниже.</p></section>
+    <noscript><div class="notice error">Для таблицы включите JavaScript. Курсы также доступны в <a href="/answer">JSON API</a>.</div></noscript>
+  </main>
+  <footer class="shell footer"><span>Источник: <a id="source" href="https://www.cbr.ru/development/SXML/" target="_blank" rel="noopener noreferrer">Банк России / Currency API</a></span><a href="/answer" target="_blank" rel="noopener">Открыть JSON API ↗</a></footer>
+</body>
+</html>

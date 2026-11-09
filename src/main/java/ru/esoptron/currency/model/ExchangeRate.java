@@ -1,6 +1,7 @@
 package ru.esoptron.currency.model;
 
 import jakarta.persistence.*;
+import ru.esoptron.currency.client.CbrClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -28,12 +29,21 @@ public class ExchangeRate {
     private BigDecimal previousRate;
     @Column(nullable = false)
     private Instant collectedAt;
+    @Column(length = 512)
+    private String sourceUrl;
 
     protected ExchangeRate() { }
 
     public ExchangeRate(LocalDate requestedDate, LocalDate rateDate, LocalDate previousRateDate,
                         CurrencyCode currencyCode, String name, int nominal, BigDecimal rate,
                         BigDecimal previousRate, Instant collectedAt) {
+        this(requestedDate, rateDate, previousRateDate, currencyCode, name, nominal, rate,
+                previousRate, collectedAt, CbrClient.SOURCE);
+    }
+
+    public ExchangeRate(LocalDate requestedDate, LocalDate rateDate, LocalDate previousRateDate,
+                        CurrencyCode currencyCode, String name, int nominal, BigDecimal rate,
+                        BigDecimal previousRate, Instant collectedAt, String sourceUrl) {
         this.requestedDate = requestedDate;
         this.rateDate = rateDate;
         this.previousRateDate = previousRateDate;
@@ -43,6 +53,7 @@ public class ExchangeRate {
         this.rate = rate;
         this.previousRate = previousRate;
         this.collectedAt = collectedAt;
+        this.sourceUrl = sourceUrl;
     }
 
     public void refreshFrom(ExchangeRate other) {
@@ -53,6 +64,7 @@ public class ExchangeRate {
         this.rate = other.rate;
         this.previousRate = other.previousRate;
         this.collectedAt = other.collectedAt;
+        this.sourceUrl = other.sourceUrl;
     }
 
     public LocalDate getRequestedDate() { return requestedDate; }
@@ -64,4 +76,5 @@ public class ExchangeRate {
     public BigDecimal getRate() { return rate; }
     public BigDecimal getPreviousRate() { return previousRate; }
     public Instant getCollectedAt() { return collectedAt; }
+    public String getSourceUrl() { return sourceUrl == null ? CbrClient.SOURCE : sourceUrl; }
 }

@@ -66,17 +66,23 @@ public class CollectionService {
         return job;
     }
 
+    public Optional<CollectionJob> latest() {
+        return jobs.values().stream().max(Comparator.comparing(CollectionJob::submittedAt));
+    }
+
     private void collect(CollectionJob job) {
         jobs.put(job.id(), job.running());
         audit.record("START id=" + job.id() + " date=" + job.date() + " thread=" + Thread.currentThread().getName());
         try {
-            var current = client.fetch(job.date());
-            var previous = client.fetch(job.date().minusDays(1));
+            var day = client.fetchDay(job.date());
+            var current = day.current();
+            var previous = day.previous();
             var collectedAt = clock.instant();
             List<ExchangeRate> rates = Arrays.stream(CurrencyCode.values()).map(code -> {
                 var quote = current.quotes().get(code);
                 return new ExchangeRate(job.date(), current.rateDate(), previous.rateDate(), code,
-                        quote.name(), quote.nominal(), quote.rate(), previous.quotes().get(code).rate(), collectedAt);
+                        quote.name(), quote.nominal(), quote.rate(), previous.quotes().get(code).rate(), collectedAt,
+                        current.sourceUrl());
             }).toList();
             // Блокировка охватывает вызов прокси: транзакция коммитится до снятия lock.
             writeLock.lockInterruptibly();
@@ -86,6 +92,7 @@ public class CollectionService {
         } catch (Exception ex) {
             if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             log.warn("Ошибка сбора за {}: {}", job.date(), ex.getMessage());
+            log.debug("Причина ошибки сбора за " + job.date(), ex);
             finish(job.finished(CollectionJob.Status.FAILED, clock.instant(), 0,
                     ex instanceof ru.esoptron.currency.client.SourceException ? ex.getMessage() : "Не удалось сохранить курсы"));
         }

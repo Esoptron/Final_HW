@@ -5,7 +5,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Map;
 
-public record RateSnapshot(LocalDate rateDate, Map<CurrencyCode, Quote> quotes) {
+public record RateSnapshot(LocalDate rateDate, Map<CurrencyCode, Quote> quotes, String sourceUrl) {
+    public RateSnapshot(LocalDate rateDate, Map<CurrencyCode, Quote> quotes) {
+        this(rateDate, quotes, CbrClient.SOURCE);
+    }
+
     public RateSnapshot {
         quotes = Map.copyOf(quotes);
     }

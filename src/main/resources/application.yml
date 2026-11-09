@@ -22,3 +22,5 @@ collector:
   enabled: true
   interval: PT6H
   audit-file: ./logs/collections.log
+rates:
+  fallback-enabled: true

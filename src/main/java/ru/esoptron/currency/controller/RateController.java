@@ -1,6 +1,5 @@
 package ru.esoptron.currency.controller;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.esoptron.currency.dto.*;
@@ -24,11 +23,6 @@ public class RateController {
         this.clock = clock;
     }
 
-    @GetMapping("/")
-    public ResponseEntity<Void> home() {
-        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create("/answer")).build();
-    }
-
     @GetMapping("/api/currencies")
     public List<CurrencyCode> currencies() { return List.of(CurrencyCode.values()); }
 
@@ -42,6 +36,12 @@ public class RateController {
 
     @GetMapping("/api/collections/{id}")
     public CollectionJob job(@PathVariable UUID id) { return collections.get(id); }
+
+    @GetMapping("/api/collections/latest")
+    public ResponseEntity<CollectionJob> latestJob() {
+        return collections.latest().map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
 
     @GetMapping({"/answer", "/api/rates"})
     public RatePage rates(@RequestParam(required = false) LocalDate date,

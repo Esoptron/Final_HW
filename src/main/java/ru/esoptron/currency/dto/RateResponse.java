@@ -1,6 +1,5 @@
 package ru.esoptron.currency.dto;
 
-import ru.esoptron.currency.client.CbrClient;
 import ru.esoptron.currency.model.CurrencyCode;
 import ru.esoptron.currency.model.ExchangeRate;
 import java.math.BigDecimal;
@@ -18,6 +17,6 @@ public record RateResponse(LocalDate requestedDate, LocalDate rateDate, LocalDat
                 .divide(entity.getPreviousRate(), 6, RoundingMode.HALF_UP);
         return new RateResponse(entity.getRequestedDate(), entity.getRateDate(), entity.getPreviousRateDate(),
                 entity.getCurrencyCode(), entity.getName(), "RUB", entity.getNominal(), entity.getRate(),
-                entity.getPreviousRate(), change, percent, entity.getCollectedAt(), CbrClient.SOURCE);
+                entity.getPreviousRate(), change, percent, entity.getCollectedAt(), entity.getSourceUrl());
     }
 }
