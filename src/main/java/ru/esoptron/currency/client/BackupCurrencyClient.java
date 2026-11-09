@@ -54,7 +54,7 @@ public class BackupCurrencyClient {
                 if (!node.isNumber() || node.decimalValue().signum() <= 0) {
                     throw new IllegalArgumentException("Некорректный курс " + code);
                 }
-                // Источник возвращает валюту за 1 RUB; API приложения — RUB за 1 валюты.
+                // Источник возвращает валюту за 1 RUB; API приложения - RUB за 1 валюты.
                 BigDecimal rate = BigDecimal.ONE.divide(node.decimalValue(), 8, RoundingMode.HALF_UP);
                 String name = switch (code) {
                     case USD -> "Доллар США";

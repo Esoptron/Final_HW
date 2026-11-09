@@ -13,7 +13,7 @@
   let loadSequence = 0;
   const decimal = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   const percent = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const formatDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString('ru-RU') : '—';
+  const formatDate = value => value ? new Date(value + 'T12:00:00').toLocaleDateString('ru-RU') : '-';
   const signed = (value, formatter) => (value > 0 ? '+' : '') + formatter.format(value);
 
   function notice(kind, title, detail) {

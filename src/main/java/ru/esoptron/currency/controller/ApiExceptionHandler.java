@@ -26,7 +26,7 @@ public class ApiExceptionHandler {
             MissingServletRequestParameterException.class})
     public ProblemDetail malformed(Exception ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
-                "Проверьте JSON, дату YYYY-MM-DD, код валюты и параметры запроса. Значения перечислений — в верхнем регистре");
+                "Проверьте JSON, дату YYYY-MM-DD, код валюты и параметры запроса. Значения перечислений - в верхнем регистре");
     }
 
     @ExceptionHandler(RejectedExecutionException.class)
