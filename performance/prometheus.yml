@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 2s
+  scrape_timeout: 1s
+
+scrape_configs:
+  - job_name: currency-rates
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["127.0.0.1:8081"]
+        labels:
+          version: baseline
+      - targets: ["127.0.0.1:8082"]
+        labels:
+          version: optimized

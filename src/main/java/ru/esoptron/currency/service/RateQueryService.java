@@ -22,8 +22,6 @@ public class RateQueryService {
         if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("page >= 0, size от 1 до 100");
         LocalDate selected = date != null ? date : repository.findLatestDate().orElse(null);
         if (selected == null) return new RatePage(List.of(), page, size, 0, 0);
-        // JPA-сущности читаем в потоке транзакции. В parallelStream передаём только неизменяемые DTO.
-        var snapshot = repository.findByRequestedDate(selected).stream().map(RateResponse::from).toList();
         Comparator<RateResponse> comparator = switch (sortBy) {
             case CURRENCY -> Comparator.comparing(RateResponse::currency);
             case RATE -> Comparator.comparing(RateResponse::rate);
@@ -32,8 +30,9 @@ public class RateQueryService {
             case CHANGE_PERCENT -> Comparator.comparing(RateResponse::changePercent);
         };
         if (direction == Direction.DESC) comparator = comparator.reversed();
-        var filtered = snapshot.parallelStream()
-                .filter(rate -> currency == null || rate.currency() == currency)
+        var filtered = repository.findByRequestedDate(selected).stream()
+                .filter(rate -> currency == null || rate.getCurrencyCode() == currency)
+                .map(RateResponse::from)
                 .sorted(comparator.thenComparing(RateResponse::currency)).toList();
         long offset = (long) page * size;
         var content = offset >= filtered.size() ? List.<RateResponse>of()

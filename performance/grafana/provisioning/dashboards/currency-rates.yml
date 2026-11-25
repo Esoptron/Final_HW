@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: Currency Rates
+    type: file
+    options:
+      path: ${GF_CURRENCY_DASHBOARDS}

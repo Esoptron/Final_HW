@@ -16,7 +16,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class CollectionService {
@@ -28,8 +27,8 @@ public class CollectionService {
     private final Clock clock;
     private final CollectionTelemetry telemetry;
     private final ConcurrentMap<UUID, CollectionJob> jobs = new ConcurrentHashMap<>();
-    private final Map<LocalDate, UUID> inFlight = new HashMap<>(); // Доступ под монитором this.
-    private final ReentrantLock writeLock = new ReentrantLock();
+    private final ConcurrentMap<LocalDate, CollectionJob> inFlight = new ConcurrentHashMap<>();
+    private final Queue<UUID> finishedJobs = new ArrayDeque<>();
 
     public CollectionService(ExecutorService collectionExecutor, CbrClient client, RateStorage storage,
                              AuditWriter audit, Clock clock) {
@@ -47,29 +46,27 @@ public class CollectionService {
         this.telemetry = telemetry;
     }
 
-    public synchronized CollectionJob submit(LocalDate date) {
+    public CollectionJob submit(LocalDate date) {
         if (date.isBefore(LocalDate.of(2000, 1, 2)) || date.isAfter(LocalDate.now(clock))) {
             throw new IllegalArgumentException("Дата должна быть между 2000-01-02 и сегодняшним днём");
         }
-        UUID active = inFlight.get(date);
-        if (active != null) return jobs.get(active);
-        if (jobs.size() >= 200) {
-            jobs.values().stream().filter(CollectionJob::terminal)
-                    .min(Comparator.comparing(CollectionJob::submittedAt)).ifPresent(job -> jobs.remove(job.id()));
-        }
+        CollectionJob active = inFlight.computeIfAbsent(date, this::enqueue);
+        return jobs.getOrDefault(active.id(), active);
+    }
+
+    private CollectionJob enqueue(LocalDate date) {
         UUID id = UUID.randomUUID();
         CollectionJob job = new CollectionJob(id, date, CollectionJob.Status.QUEUED, clock.instant(), null, 0, null);
         jobs.put(id, job);
-        inFlight.put(date, id);
         try {
             Observation parent = telemetry.current();
             long submittedNanos = System.nanoTime();
             executor.execute(() -> collect(job, parent, submittedNanos));
         } catch (RejectedExecutionException ex) {
             jobs.remove(id);
-            inFlight.remove(date);
             throw ex;
         }
+        trimHistory();
         return job;
     }
 
@@ -90,24 +87,18 @@ public class CollectionService {
         try (var scope = collection.openScope()) {
             var day = client.fetchDay(job.date());
             List<ExchangeRate> rates = telemetry.stage("rates.prepare", () -> prepare(job, day));
-            // Блокировка охватывает вызов прокси: транзакция коммитится до снятия lock.
-            writeLock.lockInterruptibly();
-            try {
-                telemetry.stage("rates.store", () -> {
-                    storage.saveBatch(rates);
-                    telemetry.saved(rates.size());
-                    return null;
-                });
-            }
-            finally { writeLock.unlock(); }
+            telemetry.stage("rates.store", () -> {
+                storage.saveBatch(rates);
+                telemetry.saved(rates.size());
+                return null;
+            });
             collection.lowCardinalityKeyValue("outcome", "success");
-            finish(job.finished(CollectionJob.Status.COMPLETED, clock.instant(), rates.size(), null));
+            finish(job, job.finished(CollectionJob.Status.COMPLETED, clock.instant(), rates.size(), null));
         } catch (Exception ex) {
             collection.lowCardinalityKeyValue("outcome", "error").error(ex);
-            if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             log.warn("Ошибка сбора за {}: {}", job.date(), ex.getMessage());
             log.debug("Причина ошибки сбора за " + job.date(), ex);
-            finish(job.finished(CollectionJob.Status.FAILED, clock.instant(), 0,
+            finish(job, job.finished(CollectionJob.Status.FAILED, clock.instant(), 0,
                     ex instanceof ru.esoptron.currency.client.SourceException ? ex.getMessage() : "Не удалось сохранить курсы"));
         } finally {
             collection.stop();
@@ -126,11 +117,23 @@ public class CollectionService {
         }).toList();
     }
 
-    private synchronized void finish(CollectionJob job) {
+    private void finish(CollectionJob submitted, CollectionJob job) {
         jobs.put(job.id(), job);
-        inFlight.remove(job.date(), job.id());
+        inFlight.remove(job.date(), submitted);
+        synchronized (finishedJobs) {
+            finishedJobs.add(job.id());
+            trimHistory();
+        }
         audit.record(job.status() + " id=" + job.id() + " date=" + job.date() + " saved=" + job.savedRates()
                 + (job.error() == null ? "" : " error=" + job.error()));
+    }
+
+    private void trimHistory() {
+        synchronized (finishedJobs) {
+            while (jobs.size() > 200 && !finishedJobs.isEmpty()) {
+                jobs.remove(finishedJobs.remove());
+            }
+        }
     }
 
     @PreDestroy

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+<hashTree>
+<TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Currency Rates" enabled="true">
+<boolProp name="TestPlan.functional_mode">false</boolProp>
+</TestPlan>
+<hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Параллельные пользователи" enabled="true">
+<stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+<intProp name="LoopController.loops">-1</intProp>
+</elementProp>
+<stringProp name="ThreadGroup.num_threads">${__P(users,12)}</stringProp>
+<stringProp name="ThreadGroup.ramp_time">${__P(ramp,3)}</stringProp>
+<boolProp name="ThreadGroup.scheduler">true</boolProp>
+<stringProp name="ThreadGroup.duration">${__P(seconds,35)}</stringProp>
+</ThreadGroup>
+<hashTree>
+<TransactionController guiclass="TransactionControllerGui" testclass="TransactionController" testname="Сбор целиком" enabled="true">
+<boolProp name="TransactionController.parent">false</boolProp>
+<boolProp name="TransactionController.includeTimers">true</boolProp>
+</TransactionController>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST сбор" enabled="true">
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+<elementProp name="" elementType="HTTPArgument">
+<boolProp name="HTTPArgument.always_encode">false</boolProp>
+<stringProp name="Argument.value">{"date":"${date}"}</stringProp>
+<stringProp name="Argument.metadata">=</stringProp>
+</elementProp>
+</collectionProp>
+</elementProp>
+<stringProp name="HTTPSampler.domain">127.0.0.1</stringProp>
+<stringProp name="HTTPSampler.port">${__P(port,8080)}</stringProp>
+<stringProp name="HTTPSampler.protocol">http</stringProp>
+<stringProp name="HTTPSampler.path">/api/collections</stringProp>
+<stringProp name="HTTPSampler.method">POST</stringProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+<stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+<stringProp name="HTTPSampler.response_timeout">5000</stringProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="JSON" enabled="true">
+<collectionProp name="HeaderManager.headers">
+<elementProp name="Content-Type" elementType="Header">
+<stringProp name="Header.name">Content-Type</stringProp>
+<stringProp name="Header.value">application/json</stringProp>
+</elementProp>
+</collectionProp>
+</HeaderManager>
+<hashTree>
+</hashTree>
+<JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="Дата для потока" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="script">def date = java.time.LocalDate.of(2024, 4, 2).plusDays(ctx.getThreadNum())
+vars.put('date', date.toString())
+vars.put('job', '')
+vars.put('status', '')
+vars.put('polls', '0')</stringProp>
+<stringProp name="cacheKey">true</stringProp>
+</JSR223PreProcessor>
+<hashTree>
+</hashTree>
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Получить ID" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="script">if (prev.getResponseCode() != '202') {
+    prev.setSuccessful(false)
+    return
+}
+def data = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+if (data.id) vars.put('job', data.id.toString())
+else prev.setSuccessful(false)</stringProp>
+<stringProp name="cacheKey">true</stringProp>
+</JSR223PostProcessor>
+<hashTree>
+</hashTree>
+</hashTree>
+<WhileController guiclass="WhileControllerGui" testclass="WhileController" testname="Опрос до завершения" enabled="true">
+<stringProp name="WhileController.condition">${__groovy(vars.get('job') &amp;&amp; !(vars.get('status') in ['COMPLETED'\, 'FAILED']) &amp;&amp; vars.get('polls').toInteger() &lt; 120,)}</stringProp>
+</WhileController>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET статус" enabled="true">
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+</collectionProp>
+</elementProp>
+<stringProp name="HTTPSampler.domain">127.0.0.1</stringProp>
+<stringProp name="HTTPSampler.port">${__P(port,8080)}</stringProp>
+<stringProp name="HTTPSampler.protocol">http</stringProp>
+<stringProp name="HTTPSampler.path">/api/collections/${job}</stringProp>
+<stringProp name="HTTPSampler.method">GET</stringProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+<stringProp name="HTTPSampler.response_timeout">5000</stringProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Интервал опроса" enabled="true">
+<stringProp name="ConstantTimer.delay">${__P(poll_ms,20)}</stringProp>
+</ConstantTimer>
+<hashTree>
+</hashTree>
+<JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Проверить состояние задачи" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="script">int attempts = vars.get('polls').toInteger() + 1
+vars.put('polls', attempts.toString())
+if (prev.getResponseCode() != '200') {
+    vars.put('status', 'FAILED')
+    prev.setSuccessful(false)
+    return
+}
+def data = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+vars.put('status', data.status.toString())
+if (data.status == 'FAILED' || (data.status == 'COMPLETED' &amp;&amp; data.savedRates != 5)
+        || (attempts &gt;= 120 &amp;&amp; data.status != 'COMPLETED')) {
+    prev.setSuccessful(false)
+    vars.put('status', 'FAILED')
+}</stringProp>
+<stringProp name="cacheKey">true</stringProp>
+</JSR223PostProcessor>
+<hashTree>
+</hashTree>
+</hashTree>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET курсы" enabled="true">
+<elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+<collectionProp name="Arguments.arguments">
+</collectionProp>
+</elementProp>
+<stringProp name="HTTPSampler.domain">127.0.0.1</stringProp>
+<stringProp name="HTTPSampler.port">${__P(port,8080)}</stringProp>
+<stringProp name="HTTPSampler.protocol">http</stringProp>
+<stringProp name="HTTPSampler.path">/answer?date=${date}</stringProp>
+<stringProp name="HTTPSampler.method">GET</stringProp>
+<boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+<boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+<stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+<stringProp name="HTTPSampler.response_timeout">5000</stringProp>
+</HTTPSamplerProxy>
+<hashTree>
+<JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="Проверить пять курсов" enabled="true">
+<stringProp name="scriptLanguage">groovy</stringProp>
+<stringProp name="script">if (vars.get('status') != 'COMPLETED' || prev.getResponseCode() != '200') {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('Сбор или чтение завершились с ошибкой')
+    return
+}
+def data = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+if (data.content.size() != 5 || data.content.any { it.requestedDate != vars.get('date') }) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('Ожидались пять курсов на запрошенную дату')
+}</stringProp>
+<stringProp name="cacheKey">true</stringProp>
+</JSR223Assertion>
+<hashTree>
+</hashTree>
+</hashTree>
+</hashTree>
+</hashTree>
+</hashTree>
+</hashTree>
+</jmeterTestPlan>
