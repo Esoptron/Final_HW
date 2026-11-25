@@ -1,13 +1,16 @@
 package ru.esoptron.currency.service;
 
+import io.micrometer.observation.Observation;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import ru.esoptron.currency.client.CbrClient;
 import ru.esoptron.currency.dto.CollectionJob;
 import ru.esoptron.currency.model.CurrencyCode;
 import ru.esoptron.currency.model.ExchangeRate;
+import ru.esoptron.currency.observability.CollectionTelemetry;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -23,17 +26,25 @@ public class CollectionService {
     private final RateStorage storage;
     private final AuditWriter audit;
     private final Clock clock;
+    private final CollectionTelemetry telemetry;
     private final ConcurrentMap<UUID, CollectionJob> jobs = new ConcurrentHashMap<>();
     private final Map<LocalDate, UUID> inFlight = new HashMap<>(); // Доступ под монитором this.
     private final ReentrantLock writeLock = new ReentrantLock();
 
     public CollectionService(ExecutorService collectionExecutor, CbrClient client, RateStorage storage,
                              AuditWriter audit, Clock clock) {
+        this(collectionExecutor, client, storage, audit, clock, CollectionTelemetry.NOOP);
+    }
+
+    @Autowired
+    public CollectionService(ExecutorService collectionExecutor, CbrClient client, RateStorage storage,
+                             AuditWriter audit, Clock clock, CollectionTelemetry telemetry) {
         this.executor = collectionExecutor;
         this.client = client;
         this.storage = storage;
         this.audit = audit;
         this.clock = clock;
+        this.telemetry = telemetry;
     }
 
     public synchronized CollectionJob submit(LocalDate date) {
@@ -51,7 +62,9 @@ public class CollectionService {
         jobs.put(id, job);
         inFlight.put(date, id);
         try {
-            executor.execute(() -> collect(job));
+            Observation parent = telemetry.current();
+            long submittedNanos = System.nanoTime();
+            executor.execute(() -> collect(job, parent, submittedNanos));
         } catch (RejectedExecutionException ex) {
             jobs.remove(id);
             inFlight.remove(date);
@@ -70,32 +83,47 @@ public class CollectionService {
         return jobs.values().stream().max(Comparator.comparing(CollectionJob::submittedAt));
     }
 
-    private void collect(CollectionJob job) {
+    private void collect(CollectionJob job, Observation parent, long submittedNanos) {
         jobs.put(job.id(), job.running());
         audit.record("START id=" + job.id() + " date=" + job.date() + " thread=" + Thread.currentThread().getName());
-        try {
+        Observation collection = telemetry.startCollection(parent, submittedNanos);
+        try (var scope = collection.openScope()) {
             var day = client.fetchDay(job.date());
-            var current = day.current();
-            var previous = day.previous();
-            var collectedAt = clock.instant();
-            List<ExchangeRate> rates = Arrays.stream(CurrencyCode.values()).map(code -> {
-                var quote = current.quotes().get(code);
-                return new ExchangeRate(job.date(), current.rateDate(), previous.rateDate(), code,
-                        quote.name(), quote.nominal(), quote.rate(), previous.quotes().get(code).rate(), collectedAt,
-                        current.sourceUrl());
-            }).toList();
+            List<ExchangeRate> rates = telemetry.stage("rates.prepare", () -> prepare(job, day));
             // Блокировка охватывает вызов прокси: транзакция коммитится до снятия lock.
             writeLock.lockInterruptibly();
-            try { storage.saveBatch(rates); }
+            try {
+                telemetry.stage("rates.store", () -> {
+                    storage.saveBatch(rates);
+                    telemetry.saved(rates.size());
+                    return null;
+                });
+            }
             finally { writeLock.unlock(); }
+            collection.lowCardinalityKeyValue("outcome", "success");
             finish(job.finished(CollectionJob.Status.COMPLETED, clock.instant(), rates.size(), null));
         } catch (Exception ex) {
+            collection.lowCardinalityKeyValue("outcome", "error").error(ex);
             if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             log.warn("Ошибка сбора за {}: {}", job.date(), ex.getMessage());
             log.debug("Причина ошибки сбора за " + job.date(), ex);
             finish(job.finished(CollectionJob.Status.FAILED, clock.instant(), 0,
                     ex instanceof ru.esoptron.currency.client.SourceException ? ex.getMessage() : "Не удалось сохранить курсы"));
+        } finally {
+            collection.stop();
         }
+    }
+
+    private List<ExchangeRate> prepare(CollectionJob job, CbrClient.DailyRates day) {
+        var current = day.current();
+        var previous = day.previous();
+        var collectedAt = clock.instant();
+        return Arrays.stream(CurrencyCode.values()).map(code -> {
+            var quote = current.quotes().get(code);
+            return new ExchangeRate(job.date(), current.rateDate(), previous.rateDate(), code,
+                    quote.name(), quote.nominal(), quote.rate(), previous.quotes().get(code).rate(), collectedAt,
+                    current.sourceUrl());
+        }).toList();
     }
 
     private synchronized void finish(CollectionJob job) {

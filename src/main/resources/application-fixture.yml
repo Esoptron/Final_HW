@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: cbr-fixture
+  datasource:
+    url: jdbc:h2:mem:cbr-fixture
+collector:
+  enabled: false
+  audit-file: ./logs/fixture.log
+server:
+  port: 8090
+management:
+  server:
+    port: 8083

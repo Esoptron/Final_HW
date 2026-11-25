@@ -1,0 +1,10 @@
+observability:
+  log-stages: true
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${TRACE_SAMPLE_RATE:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}

@@ -2,6 +2,7 @@ package ru.esoptron.currency.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
@@ -41,10 +42,12 @@ public class ConcurrencyConfig {
     }
 
     @Bean
-    public RestTemplate restTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(10000);
-        return new RestTemplate(factory);
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+        return builder.requestFactory(() -> {
+            var factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(5000);
+            factory.setReadTimeout(10000);
+            return factory;
+        }).build();
     }
 }

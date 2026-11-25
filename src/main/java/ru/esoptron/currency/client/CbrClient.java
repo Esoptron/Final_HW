@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import ru.esoptron.currency.observability.CollectionTelemetry;
 
 import java.net.URI;
 import java.time.LocalDate;
@@ -21,18 +22,28 @@ public class CbrClient {
     private final CbrXmlParser parser;
     private final BackupCurrencyClient backup;
     private final boolean fallbackEnabled;
+    private final String sourceUrl;
+    private final CollectionTelemetry telemetry;
 
     public CbrClient(RestTemplate restTemplate, CbrXmlParser parser) {
         this(restTemplate, parser, null, false);
     }
 
+    public CbrClient(RestTemplate restTemplate, CbrXmlParser parser, BackupCurrencyClient backup,
+                     boolean fallbackEnabled) {
+        this(restTemplate, parser, backup, fallbackEnabled, SOURCE, CollectionTelemetry.NOOP);
+    }
+
     @Autowired
     public CbrClient(RestTemplate restTemplate, CbrXmlParser parser, BackupCurrencyClient backup,
-                     @Value("${rates.fallback-enabled:true}") boolean fallbackEnabled) {
+                     @Value("${rates.fallback-enabled:true}") boolean fallbackEnabled,
+                     @Value("${rates.cbr-url}") String sourceUrl, CollectionTelemetry telemetry) {
         this.restTemplate = restTemplate;
         this.parser = parser;
         this.backup = backup;
         this.fallbackEnabled = fallbackEnabled;
+        this.sourceUrl = sourceUrl;
+        this.telemetry = telemetry;
     }
 
     public record DailyRates(RateSnapshot current, RateSnapshot previous) { }
@@ -49,15 +60,18 @@ public class CbrClient {
     }
 
     public RateSnapshot fetch(LocalDate date) {
-        URI uri = UriComponentsBuilder.fromUriString(SOURCE)
+        URI uri = UriComponentsBuilder.fromUriString(sourceUrl)
                 .queryParam("date_req", date.format(DateTimeFormatter.ofPattern("dd/MM/uuuu")))
                 .build().toUri();
         try {
-            RateSnapshot snapshot = parser.parse(restTemplate.getForObject(uri, byte[].class));
-            if (snapshot.rateDate().isAfter(date)) {
-                throw new SourceException("Источник вернул курс из будущего относительно запрошенной даты");
-            }
-            return snapshot;
+            byte[] body = telemetry.stage("xml.download", () -> restTemplate.getForObject(uri, byte[].class));
+            return telemetry.parse("xml", () -> {
+                RateSnapshot snapshot = parser.parse(body);
+                if (snapshot.rateDate().isAfter(date)) {
+                    throw new SourceException("Источник вернул курс из будущего относительно запрошенной даты");
+                }
+                return snapshot;
+            });
         } catch (RestClientException ex) {
             throw new SourceException("ЦБ РФ недоступен: не удалось загрузить курсы за " + date, ex);
         }

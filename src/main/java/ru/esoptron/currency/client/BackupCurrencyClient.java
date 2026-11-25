@@ -3,8 +3,10 @@ package ru.esoptron.currency.client;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.client.RestTemplate;
 import ru.esoptron.currency.model.CurrencyCode;
+import ru.esoptron.currency.observability.CollectionTelemetry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,11 +22,19 @@ public class BackupCurrencyClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final CollectionTelemetry telemetry;
 
     public BackupCurrencyClient(RestTemplate restTemplate, ObjectMapper mapper, Clock clock) {
+        this(restTemplate, mapper, clock, CollectionTelemetry.NOOP);
+    }
+
+    @Autowired
+    public BackupCurrencyClient(RestTemplate restTemplate, ObjectMapper mapper, Clock clock,
+                                CollectionTelemetry telemetry) {
         this.restTemplate = restTemplate;
         this.mapper = mapper;
         this.clock = clock;
+        this.telemetry = telemetry;
     }
 
     public RateSnapshot fetch(LocalDate date) {
@@ -38,7 +48,15 @@ public class BackupCurrencyClient {
 
     private RateSnapshot fetchFrom(String url, LocalDate requestedDate) {
         try {
-            byte[] body = restTemplate.getForObject(url, byte[].class);
+            byte[] body = telemetry.stage("json.download", () -> restTemplate.getForObject(url, byte[].class));
+            return telemetry.parse("json", () -> parse(body, url, requestedDate));
+        } catch (Exception ex) {
+            throw new SourceException("Резервный источник недоступен или не содержит курсов за " + requestedDate, ex);
+        }
+    }
+
+    private RateSnapshot parse(byte[] body, String url, LocalDate requestedDate) {
+        try {
             if (body == null || body.length == 0 || body.length > 1_000_000) {
                 throw new IllegalArgumentException("Пустой или слишком большой ответ");
             }
@@ -66,8 +84,8 @@ public class BackupCurrencyClient {
                 quotes.put(code, new RateSnapshot.Quote(name, 1, rate));
             }
             return new RateSnapshot(rateDate, quotes, url);
-        } catch (Exception ex) {
-            throw new SourceException("Резервный источник недоступен или не содержит курсов за " + requestedDate, ex);
+        } catch (java.io.IOException ex) {
+            throw new IllegalArgumentException("Некорректный JSON с курсами", ex);
         }
     }
 }

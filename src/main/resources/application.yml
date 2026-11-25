@@ -24,3 +24,28 @@ collector:
   audit-file: ./logs/collections.log
 rates:
   fallback-enabled: true
+  cbr-url: https://www.cbr.ru/scripts/XML_daily.asp
+observability:
+  log-stages: false
+management:
+  server:
+    port: 8081
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,threaddump
+  info:
+    env:
+      enabled: true
+  tracing:
+    enabled: false
+  metrics:
+    distribution:
+      percentiles-histogram:
+        "http.server.requests": true
+        "currency.parse.duration": true
+        "currency.collection": true
+info:
+  app:
+    name: Currency Rates
